@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ai-cloud-memory-${{ github.event_name == 'schedule' && 'scheduled' || github.run_id }}
+  group: ai-cloud-memory-${{ (github.event_name == 'schedule' || inputs.continuous == 'true') && 'continuous' || github.run_id }}
   cancel-in-progress: false
 
 jobs:
