@@ -7,6 +7,10 @@ on:
         description: "Nur testen, keine Cloud-Daten schreiben"
         required: false
         default: "false"
+      continuous:
+        description: "Dauerwaechter sofort starten"
+        required: false
+        default: "false"
   schedule:
     # GitHub schedule events can be delayed. The scheduled run is only a
     # watchdog; the job itself performs the checks every five minutes.
@@ -57,7 +61,7 @@ jobs:
         shell: bash
         run: |
           checks=1
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.continuous }}" == "true" ]]; then
             checks=66
           fi
 
