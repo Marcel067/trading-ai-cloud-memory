@@ -8,15 +8,21 @@ on:
         required: false
         default: "false"
   schedule:
-    - cron: "*/5 * * * *"
+    # GitHub schedule events can be delayed. The scheduled run is only a
+    # watchdog; the job itself performs the checks every five minutes.
+    - cron: "17 * * * *"
 
 permissions:
   contents: read
 
+concurrency:
+  group: ai-cloud-memory-${{ github.event_name == 'schedule' && 'scheduled' || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   watch-signal:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 345
 
     steps:
       - name: Checkout
@@ -35,7 +41,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Run signal watcher
+      - name: Run signal watcher every five minutes
         env:
           SIGNAL_SYMBOL: XAUUSD
           SIGNAL_DATA_PROVIDER: yahoo
@@ -48,7 +54,26 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true' && '1' || '0' }}
-        run: node automation/ai-signal-watch.mjs
+        shell: bash
+        run: |
+          checks=1
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            checks=66
+          fi
+
+          for check in $(seq 1 "$checks"); do
+            echo "::group::Gold check $check/$checks - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            if node automation/ai-signal-watch.mjs; then
+              echo "Gold check completed."
+            else
+              echo "::warning::Gold check failed temporarily; the watcher will retry in five minutes."
+            fi
+            echo "::endgroup::"
+
+            if [[ "$check" -lt "$checks" ]]; then
+              sleep 300
+            fi
+          done
 
       - name: Ensure alert state exists
         if: always()
